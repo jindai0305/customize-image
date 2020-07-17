@@ -1,0 +1,24 @@
+{
+    "name": "jingdai/customize-image",
+    "description": "customize image with php-gd",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "jindai",
+            "email": "jindai0305@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": "^7.0",
+        "ext-gd": "*",
+        "ext-mbstring": "*",
+        "ext-fileinfo": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Jindai\\": "src/"
+        }
+    }
+}
