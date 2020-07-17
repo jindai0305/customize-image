@@ -27,13 +27,14 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
     /** @var resource 图像句柄 */
     protected $im;
 
-    protected $_font;
-    protected $_size;
-    protected $_color;
-    protected $_lineSpacing;
-    protected $_vertical;
-    protected $_traditional;
-    protected $_float;
+    protected $_font;           // 字体
+    protected $_size;           // 字体大小
+    protected $_color;          // 字体颜色
+    protected $_lineSpacing;    // 字体间距
+    protected $_float;          // 字体排布方向
+
+    protected $_bgWidth;
+    protected $_bgHeight;
 
     /**
      * 设置背景文件
@@ -44,6 +45,10 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
     public function createBgWithFile($file)
     {
         $this->im = $this->loadFile($file);
+
+        $this->_bgWidth = imagesx($this->im);
+        $this->_bgHeight = imagesy($this->im);
+
         $this->_color = $this->_lineSpacing = null;
         return $this;
     }
@@ -59,6 +64,10 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
     public function createBgWithColor($width, $height, $color = "#FFFFFF")
     {
         $this->im = imagecreatetruecolor($width, $height);
+
+        $this->_bgWidth = $width;
+        $this->_bgHeight = $height;
+
         imagefill($this->im, 0, 0, $this->getColor($color));
         return $this;
     }
@@ -166,6 +175,26 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
     }
 
     /**
+     * 设置文字float
+     * @param float $value
+     * @return static
+     */
+    public function setFloat($value)
+    {
+        $this->_float = $value;
+        return $this;
+    }
+
+    /**
+     * 设置文字float
+     * @return string
+     */
+    public function getFloat()
+    {
+        return $this->_float;
+    }
+
+    /**
      * 批量设置文字参数
      * @param array $params
      * @return static
@@ -176,13 +205,32 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
         isset($params['color']) && $this->setColor($params['color']);
         isset($params['lineSpacing']) && $this->setLineSpacing($params['lineSpacing']);
         isset($params['font']) && $this->setFont($params['font']);
-        if (isset($params['vertical'])) {
-            $this->_vertical = $params['vertical'];
-        }
-        if (isset($params['traditional'])) {
-            $this->_traditional = $params['traditional'];
-        }
+        isset($params['float']) && $this->setFloat($params['float']);
         return $this;
+    }
+
+    /**
+     * 输出 PNG 数据
+     * @return string
+     */
+    public function toPng()
+    {
+        ob_start();
+        ImagePng($this->im);
+        $this->clearImage();
+        return ob_get_clean();
+    }
+
+    /**
+     * 输出 JPG 数据
+     * @return string
+     */
+    public function toJpg()
+    {
+        ob_start();
+        ImageJpeg($this->im);
+        $this->clearImage();
+        return ob_get_clean();
     }
 
     /**
@@ -215,12 +263,12 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
         if (!$text = $this->formatText($text)) {
             return $this;
         }
-
         $extra = [];
         if ($this->_lineSpacing !== null) {
             $extra['linespacing'] = $this->_lineSpacing;
         }
         $info = ImageFTBBox($this->getSize(), 0, $this->getFont(), $text, $extra);
+
         $rw = $info[2] - $info[0];
         $len = (strlen($text) + mb_strlen($text, $charset)) / 2;
         // 无长度
@@ -237,9 +285,18 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
         }
         // 计算每个字符的长度
         $singleW = $textWidth / $len;
+
+        if ($w === null) {
+            $w = $this->_bgWidth;
+        }
+        if ($h === null) {
+            $h = $this->_bgHeight;
+        }
+
         // 计算每行最多容纳多少个字符
         $maxCount = floor($w / $singleW);
         $result = [];
+
         while ($len > $maxCount) {
             // 成功取得一行
             $result[] = mb_strimwidth($text, 0, $maxCount, '', $charset);
@@ -348,69 +405,6 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
         ImageCopyResampled($this->im, $im, $x, $y, 0, 0, $rw, $rh, $_w, $_h);
         ImageDestroy($im);
         return $this;
-    }
-
-    /**
-     * 输出 PNG 数据
-     * @return string
-     */
-    public function toPng()
-    {
-        ob_start();
-        ImagePng($this->im);
-        $this->clearImage();
-        return ob_get_clean();
-    }
-
-    /**
-     * 输出 JPG 数据
-     * @return string
-     */
-    public function toJpg()
-    {
-        ob_start();
-        ImageJpeg($this->im);
-        $this->clearImage();
-        return ob_get_clean();
-    }
-
-    /**
-     * 清除资源文件
-     */
-    protected function clearImage()
-    {
-        ImageDestroy($this->im);
-        $this->im = null;
-    }
-
-    /**
-     * @param string $file
-     * @return resource
-     *
-     * @see http://php.net/manual/en/ref.image.php
-     * imagecreatefrombmp — Create a new image from file or URL
-     * imagecreatefromgd2 — Create a new image from GD2 file or URL
-     * imagecreatefromgd2part — Create a new image from a given part of GD2 file or URL
-     * imagecreatefromgd — Create a new image from GD file or URL
-     * imagecreatefromgif — Create a new image from file or URL
-     * imagecreatefromjpeg — Create a new image from file or URL
-     * imagecreatefrompng — Create a new image from file or URL
-     * imagecreatefromstring — Create a new image from the image stream in the string
-     * imagecreatefromwbmp — Create a new image from file or URL
-     * imagecreatefromwebp — Create a new image from file or URL
-     * imagecreatefromxbm — Create a new image from file or URL
-     * imagecreatefromxpm — Create a new image from file or URL
-     * @throws FileNotExistException
-     */
-    protected function loadFile($file)
-    {
-        if (substr($file, 0, 4) === 'http') {
-            $file = file_get_contents($file, false, stream_context_create(['ssl' => ['verify_peer' => false, "verify_peer_name" => false]]));
-        }
-        if (!is_file($file)) {
-            throw new FileNotExistException('please confirm real path');
-        }
-        return @imagecreatefromstring($file);
     }
 
     /**
@@ -616,5 +610,48 @@ class Draw extends BaseObjectProvider implements ImageDrawProvider
     {
         preg_match_all('/(?:[\x00-\x7f]|[\xe0-\xef][\x80-\xbf][\x80-\xbf])/', str_replace("\n", "", $str), $matches);
         return implode('', $matches[0]);
+    }
+
+
+    /**
+     * 清除资源文件
+     */
+    protected function clearImage()
+    {
+        ImageDestroy($this->im);
+        $this->im = null;
+    }
+
+    /**
+     * @param string $file
+     * @return resource
+     *
+     * @see http://php.net/manual/en/ref.image.php
+     * imagecreatefrombmp — Create a new image from file or URL
+     * imagecreatefromgd2 — Create a new image from GD2 file or URL
+     * imagecreatefromgd2part — Create a new image from a given part of GD2 file or URL
+     * imagecreatefromgd — Create a new image from GD file or URL
+     * imagecreatefromgif — Create a new image from file or URL
+     * imagecreatefromjpeg — Create a new image from file or URL
+     * imagecreatefrompng — Create a new image from file or URL
+     * imagecreatefromstring — Create a new image from the image stream in the string
+     * imagecreatefromwbmp — Create a new image from file or URL
+     * imagecreatefromwebp — Create a new image from file or URL
+     * imagecreatefromxbm — Create a new image from file or URL
+     * imagecreatefromxpm — Create a new image from file or URL
+     * @throws FileNotExistException
+     */
+    protected function loadFile($file)
+    {
+        if (substr($file, 0, 4) === 'http') {
+            $file = file_get_contents($file, false, stream_context_create(['ssl' => ['verify_peer' => false, "verify_peer_name" => false]]));
+        } else {
+            if (!is_file($file)) {
+                throw new FileNotExistException('please confirm real path');
+            }
+            $file = file_get_contents($file);
+        }
+
+        return @imagecreatefromstring($file);
     }
 }
